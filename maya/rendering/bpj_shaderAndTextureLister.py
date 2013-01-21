@@ -3,7 +3,7 @@ import maya.cmds as cmds
 import maya.mel as mel
 import maya.OpenMaya as om
 
-import os.path
+import os.path, re
 from Tkinter import Tk
 from functools import partial
 
@@ -331,12 +331,12 @@ class Ui(object):
 		selectedTab = cmds.tabLayout(self.mainTabLayout, query = True, selectTabIndex = True)
 		tabNameList = cmds.tabLayout(self.mainTabLayout, query = True, tabLabelIndex = True)
 		
-		print tabNameList[selectedTab-1]
+		# print tabNameList[selectedTab-1]
 		
-		if tabNameList[selectedTab-1] == 'Inspector':
-			itemList = self.nodeListLayout.getAllItems()
-			for item in itemList:
-				print item.getName()
+		# if tabNameList[selectedTab-1] == 'Inspector':
+			# itemList = self.nodeListLayout.getAllItems()
+			# for item in itemList:
+				# print item.getName()
 
 	def switchToPanel(self):
 		# fullUiPath = cmds.layout(self.mainLayout, q = 1, fullPathName = 1)
@@ -423,6 +423,9 @@ class NodeListLayout(object):
 			node : nodeHandle
 		"""
 		pass
+		
+	def getAllItems(self):
+		return self.itemList
 
 	def getItemByListIndex(self, index):
 		"""
@@ -432,8 +435,9 @@ class NodeListLayout(object):
 		if index > 0 and index <= len(self.itemList):
 			return self.itemList[index-1].listItemLayoutId
 
-	def getAllItems(self):
-		return self.itemList
+	def updateAllItemLabels():
+		print 'NodeListLayout.updateAllItemLabels()'
+		print self.itemList
 
 	def hideItemByListIndex(self, index):
 		cmds.layout(self.getItemByListIndex(index), edit = 1, manage = 0)
@@ -476,10 +480,14 @@ class NodeListItem(object):
 	listItemLayoutId = None
 	iconSize = 64
 	labelWidth = 180
+	hLabel = None
 	bgColor = (0.3, 0.3, 0.3)
 	colorCodeError = (0.75, 0, 0)
 	colorCodeWarning = (0.75, 0.4, 0)
 	colorCodeSuccess = (0, 0.75, 0)
+	
+	# cmds.scriptJob(killWithScene = True, parent = self.mainLayout, nodeNameChanged = ['NameChanged', 'print "Node Rename Triggered!"'])
+	# cmds.scriptJob(killWithScene = True, parent = self.mainLayout, nodeDeleted = ['NameChanged', 'print "Node Rename Triggered!"'])
 
 	def __init__(self, nodeStrId, parentLayout):
 		"""
@@ -505,8 +513,13 @@ class NodeListItem(object):
 	def getName(self):
 		return self.node.name()
 		
-	def updateName(self, arg = None):
-		pass
+	@staticmethod
+	def updateLabel(hLabel = '', labelText = ''):
+		print 'NodeListItem.updateLabel("%s", "%s")' %(hLabel, labelText)
+		match = re.findall('[a-zA-Z0-9_]+$', hLabel)
+		print os.path.basename(labelText)
+		print match[0]
+		cmds.iconTextButton(match[0], edit = True, label = os.path.basename(labelText))
 
 	def getParentLayout(self):
 		pass
@@ -542,7 +555,7 @@ class NodeListItemShader(NodeListItem):
 		nodeStrId = self.node.name()
 		swatchCmd = 'mel.eval(\'showEditorExact \"' + nodeStrId + '\";\')'
 		shSwatch = cmds.swatchDisplayPort(sn = nodeStrId, wh = (self.iconSize, self.iconSize), renderSize = self.iconSize, pressCommand = swatchCmd)
-		shLabel = cmds.iconTextButton(label = nodeStrId, height = self.iconSize, style = 'iconAndTextHorizontal', commandRepeatable = 0, c = 'import bpj_shaderAndTextureLister as satl\nsatl.onShadingNodeLabelPressed("' + nodeStrId + '")')
+		self.hLabel = cmds.iconTextButton(label = nodeStrId, height = self.iconSize, style = 'iconAndTextHorizontal', commandRepeatable = 0, c = 'import bpj_shaderAndTextureLister as satl\nsatl.onShadingNodeLabelPressed("' + nodeStrId + '")')
 		shCollapseChkbx = cmds.iconTextButton(label = 'Collapse/Expand', annotation = 'collapse shader', width = 18, height = self.iconSize, style = 'iconOnly', image1 = 'bpj_nodeListItemArrowDown_64.png', commandRepeatable = 0)
 
 		# self.setColorCode()
@@ -551,12 +564,12 @@ class NodeListItemShader(NodeListItem):
 				(shSwatch, 'left', 0),
 				(shCollapseChkbx, 'right', 0),
 				(shSwatch, 'top', 0),
-				(shLabel, 'top', 0),
+				(self.hLabel, 'top', 0),
 				(shCollapseChkbx, 'top', 0),
 				],
 			attachControl = [
-				(shLabel, 'left', 0, shSwatch),
-				(shLabel, 'right', 0, shCollapseChkbx)
+				(self.hLabel, 'left', 0, shSwatch),
+				(self.hLabel, 'right', 0, shCollapseChkbx)
 				])
 
 
@@ -598,7 +611,7 @@ class NodeListItemFile(NodeListItem):
 			label = 'No file referenced!'
 
 		labelCmd = 'import bpj_shaderAndTextureLister as satl\nsatl.browseForTexture("' + nodeStrId + '")'
-		shLabel = cmds.iconTextButton(label = label, height = self.iconSize/2, style = 'iconAndTextHorizontal', commandRepeatable = 0)
+		self.hLabel = cmds.iconTextButton(label = label, height = self.iconSize/2, style = 'iconAndTextHorizontal', commandRepeatable = 0, command = labelCmd)
 
 		openFileCmd = 'import bpj_shaderAndTextureLister as satl\nsatl.browseForTexture("' + nodeStrId + '")'
 		openFileBtn = cmds.iconTextButton(label = 'Load Texture', annotation = 'Browse for a file on your computer...', image1 = 'freeformOff.png', height = self.iconSize/2, width = self.iconSize/2, style = 'iconOnly', commandRepeatable = 0, command = openFileCmd)
@@ -615,19 +628,25 @@ class NodeListItemFile(NodeListItem):
 		msg += 'LMB+Alt: Copy folder path to clipboard'
 		openFileLocBtn = cmds.iconTextButton(label = 'Open Texture Location', annotation = msg, image = 'freeformOff.png', height = self.iconSize/2, width = self.iconSize/2, style = 'iconOnly', commandRepeatable = 0, command = openFileLocCmd)
 
-		cmds.formLayout( self.listItemLayoutId, edit = 1, backgroundColor = self.backgroundColor, annotation = filePath,
-			attachForm = [(txSwatch, 'left', 0), (shLabel, 'right', 0)],
+		cmds.formLayout( self.listItemLayoutId, edit = 1, backgroundColor = self.backgroundColor, annotation = os.path.normpath(filePath),
+			attachForm = [(txSwatch, 'left', 0), (self.hLabel, 'right', 0)],
 			attachControl = [
-				(shLabel, 'left', 0, txSwatch),
+				(self.hLabel, 'left', 0, txSwatch),
 				(openFileBtn, 'left', 10, txSwatch),
-				(openFileBtn, 'top', 0, shLabel),
+				(openFileBtn, 'top', 0, self.hLabel),
 				(viewFileBtn, 'left', 0, openFileBtn),
-				(viewFileBtn, 'top', 0, shLabel),
+				(viewFileBtn, 'top', 0, self.hLabel),
 				(editFileBtn, 'left', 0, viewFileBtn),
-				(editFileBtn, 'top', 0, shLabel),
+				(editFileBtn, 'top', 0, self.hLabel),
 				(openFileLocBtn, 'left', 0, editFileBtn),
-				(openFileLocBtn, 'top', 0, shLabel)
+				(openFileLocBtn, 'top', 0, self.hLabel)
 				] )
+		
+		# scriptjob for updating the label of the NodeListItem
+		cmd = 'import bpj_shaderAndTextureLister as bpj_stl;'
+		cmd+= 'import maya.cmds as cmds;'
+		cmd+= 'bpj_stl.NodeListItem.updateLabel("%s", cmds.getAttr("%s.fileTextureName"))' %(self.hLabel, nodeStrId)
+		cmds.scriptJob(parent = self.hLabel, attributeChange = [nodeStrId + '.fileTextureName', cmd])
 
 
 
@@ -695,15 +714,6 @@ def openTextureLocation(fileNode):
 		if mods == 0:
 			startfile(os.path.dirname(filePath))
 			
-		if mods == 8: # shift
-			r = Tk()
-			r.withdraw()
-			r.clipboard_clear()
-			r.clipboard_append(os.path.dirname(filePath))
-			r.destroy()
-			
-			# return True
-			
 		if mods == 1: # alt
 			r = Tk()
 			r.withdraw()
@@ -711,7 +721,12 @@ def openTextureLocation(fileNode):
 			r.clipboard_append(filePath)
 			r.destroy()
 			
-			# return True
+		if mods == 8: # shift
+			r = Tk()
+			r.withdraw()
+			r.clipboard_clear()
+			r.clipboard_append(os.path.dirname(filePath))
+			r.destroy()
 
 
 
@@ -808,8 +823,20 @@ def getShadingGroupsAndTextures():
 
 	if len(shadingEngineList) > 0:
 		for shadingEngine in shadingEngineList:
-			nodeList = cmds.listHistory(shadingEngine, future = 0, allGraphs = 1)
-			fileNodeList = cmds.lsThroughFilter(fileFilter, item = nodeList, nodeArray = 1, sort = 'byName')
+			fileNodeList = []
+			# nodeList = cmds.listHistory(shadingEngine, future = 0, allGraphs = 1)
+			# fileNodeList = cmds.lsThroughFilter(fileFilter, item = nodeList, nodeArray = 1, sort = 'byName')
+			nodeList = cmds.listHistory(shadingEngine, future = False, allGraphs = True, allConnections = False)
+			
+			fileNodeList = cmds.ls(nodeList, exactType = ['file'])
+			# WORKAROUND of a maya bug. Maya is not listing file nodes connected to the vector displacement attr of a displacement node!
+			# So we need to query the connections of the displacement shader (if exists) as well.
+			displacementShaderNodeList = cmds.ls(nodeList, exactType = ['displacementShader']) 
+			
+			for dispNode in displacementShaderNodeList:
+				nodeList = cmds.listHistory(dispNode, future = False, allGraphs = True, allConnections = False)
+				fileNodeList.extend(cmds.ls(nodeList, exactType = ['file']))
+			
 			fileNodeList = list(set(fileNodeList))
 
 			shaderTextureDict[shadingEngine] = fileNodeList
