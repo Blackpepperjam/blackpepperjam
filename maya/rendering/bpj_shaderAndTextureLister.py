@@ -130,7 +130,7 @@ class Ui(object):
 			if cmds.toolBar(self.toolbarId, q = 1, exists = 1):
 				cmds.deleteUI(self.toolbarId, layout = 1)
 			cmds.toolBar( self.toolbarId, area=location, content = 'bpj_shaderAndTextureListerScriptedPanelWindow', allowedArea = allowedAreas, label = 'Shader/Texture Lister' )
-			
+
 
 			# cmds.scriptedPanel( 'bpj_shaderAndTextureListerScriptedPanel', e = 1, unParent = 1)
 			# cmds.scriptedPanel( 'bpj_shaderAndTextureListerScriptedPanel', e = 1, parent = 'toolbarWindow')
@@ -139,7 +139,8 @@ class Ui(object):
 				# cmds.deleteUI('bpj_shaderAndTextureListerScriptedPanelWindow', window = 1)
 
 		self.updateUiOnSelectionChange(self.listLayoutId)
-		self.sjSelChangeId = self.createScriptJob()
+		# is it save to delete this line????
+		# self.sjSelChangeId = self.createScriptJob()
 
 	def createToolbarWindow(self):
 		if cmds.toolBar(self.toolbarId, q = 1, exists = 1):
@@ -162,31 +163,31 @@ class Ui(object):
 		cmds.setParent('..')
 
 		self.mainTabLayout = cmds.tabLayout(changeCommand = self.onTabChange)
-		
+
 		self.nodeListLayout = NodeListLayout() # create the node list layout
 		self.listLayoutId = self.nodeListLayout.getId()
 		cmds.setParent('..')
-		
+
 		allShaders = cmds.columnLayout()
 		cmds.button()
 		cmds.setParent('..')
-		
+
 		allTextures = cmds.columnLayout()
 		cmds.button()
 		cmds.setParent('..')
-		
+
 		cmds.formLayout(
 			self.mainLayout,
 			edit = 1,
 			width = self.toolbarWidth,
 			attachForm = [
-				# (self.listLayoutId, 'left', 0), 
-				# (self.listLayoutId, 'right', 0), 
-				# (self.listLayoutId, 'bottom', 0), 
+				# (self.listLayoutId, 'left', 0),
+				# (self.listLayoutId, 'right', 0),
+				# (self.listLayoutId, 'bottom', 0),
 				(self.mainTabLayout, 'left', 0),
 				(self.mainTabLayout, 'right', 0),
 				(self.mainTabLayout, 'bottom', 0),
-				(headerUiLayout, 'left', 0), 
+				(headerUiLayout, 'left', 0),
 				(headerUiLayout, 'right', 0),
 			],
 			attachControl = [
@@ -194,14 +195,14 @@ class Ui(object):
 				# (self.listLayoutId, 'top', 0, headerUiLayout),
 			],
 		)
-		
+
 		cmds.tabLayout(
-			self.mainTabLayout, 
-			edit = True, 
+			self.mainTabLayout,
+			edit = True,
 			tabLabel = (
 				(self.listLayoutId, 'Inspector'),
 				(allShaders, 'Shaders'),
-				(allTextures, 'Textures'), 
+				(allTextures, 'Textures'),
 			),
 		)
 
@@ -246,7 +247,14 @@ class Ui(object):
 			# self.nodeListLayout.filterListByType('shader/surface')
 			# self.nodeListLayout.filterListByType('file')
 
+		print '+++++++++++++++++++++++++++++++++++++++++'
+		for k in self.nodeListLayout.itemDict.keys():
+			print k, ' -> ', self.nodeListLayout.itemDict[k]
+
 	def autoRefreshNodeList(self, arg = None):
+		"""
+			BUG: if auto refresh is turned on, then this function is getting called 2 times in a row! WEIRD
+		"""
 		if cmds.window(self.windowId, q = 1, exists = 1):
 			if self.isAutoRefresh() == 1 and cmds.window(self.windowId, q = 1, vis = 1) == 1:
 				self.updateUiOnSelectionChange()
@@ -255,10 +263,12 @@ class Ui(object):
 				self.updateUiOnSelectionChange()
 
 	def manualRefreshNodeList(self, arg = None):
+
 		if cmds.window(self.windowId, q = 1, exists = 1):
 			if cmds.window(self.windowId, q = 1, vis = 1) == 1:
 				self.updateUiOnSelectionChange()
-		elif cmds.layout(self.mainLayout, q = 1, isObscured = 1) == 0:
+
+		if cmds.layout(self.mainLayout, q = 1, isObscured = 1) == 0:
 			self.updateUiOnSelectionChange()
 
 	def menuDockTo(self, parent):
@@ -326,13 +336,13 @@ class Ui(object):
 
 	def isAutoRefresh(self):
 		return cmds.iconTextCheckBox(self.autoRefreshCkbx, q = 1, value = 1)
-		
+
 	def onTabChange(self, arg = None):
 		selectedTab = cmds.tabLayout(self.mainTabLayout, query = True, selectTabIndex = True)
 		tabNameList = cmds.tabLayout(self.mainTabLayout, query = True, tabLabelIndex = True)
-		
+
 		# print tabNameList[selectedTab-1]
-		
+
 		# if tabNameList[selectedTab-1] == 'Inspector':
 			# itemList = self.nodeListLayout.getAllItems()
 			# for item in itemList:
@@ -369,7 +379,7 @@ class Ui(object):
 
 
 
-#+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # Class NodeListLayout
 #
 class NodeListLayout(object):
@@ -378,6 +388,7 @@ class NodeListLayout(object):
 	numberOfColumns = 1
 	sortBy = 'name'
 	itemList = [] # nodes shown in the NodeListLayout
+	itemDict = {} # key is the handle to the control, value is the item object
 
 	def __init__(self):
 		self.createLayout()
@@ -386,12 +397,18 @@ class NodeListLayout(object):
 		self.nodeListLayout = cmds.scrollLayout(childResizable = 1)
 
 	def addItem(self, node = None, nodeType = None, arg = None):
+
 		if nodeType == 'shader':
 			# print 'creating nodelist item %s of type %s' %(node, nodeType)
-			self.itemList.append(NodeListItemShader(node, self.nodeListLayout))
+			item = NodeListItemShader(node, self.nodeListLayout)
+			self.itemList.append(item)
+			self.itemDict[item.getHItem()] = item
+
 		if nodeType == 'file':
 			# print 'creating nodelist item %s of type %s' %(node, nodeType)
-			self.itemList.append(NodeListItemFile(node, self.nodeListLayout))
+			item = NodeListItemFile(node, self.nodeListLayout)
+			self.itemList.append(item)
+			self.itemDict[item.getHItem()] = item
 
 	def removeItem(self, node):
 		"""
@@ -416,6 +433,7 @@ class NodeListLayout(object):
 				cmds.deleteUI(kid, layout = 1)
 
 		self.itemList = []
+		self.itemDict = {}
 
 	def getItem(self, node):
 		"""
@@ -423,7 +441,7 @@ class NodeListLayout(object):
 			node : nodeHandle
 		"""
 		pass
-		
+
 	def getAllItems(self):
 		return self.itemList
 
@@ -485,7 +503,7 @@ class NodeListItem(object):
 	colorCodeError = (0.75, 0, 0)
 	colorCodeWarning = (0.75, 0.4, 0)
 	colorCodeSuccess = (0, 0.75, 0)
-	
+
 	# cmds.scriptJob(killWithScene = True, parent = self.mainLayout, nodeNameChanged = ['NameChanged', 'print "Node Rename Triggered!"'])
 	# cmds.scriptJob(killWithScene = True, parent = self.mainLayout, nodeDeleted = ['NameChanged', 'print "Node Rename Triggered!"'])
 
@@ -499,8 +517,8 @@ class NodeListItem(object):
 		# container layout for the NodeListItem
 		self.listItemLayoutId = cmds.formLayout(height = self.iconSize, parent = parentLayout)
 
-	def getNodeListLayoutId(self, arg = None):
-		pass
+	def getHItem(self, arg = None):
+		return self.listItemLayoutId
 
 	def getNodeHandle(self, nodeStrId):
 		selList = om.MSelectionList()
@@ -512,7 +530,7 @@ class NodeListItem(object):
 
 	def getName(self):
 		return self.node.name()
-		
+
 	@staticmethod
 	def updateLabel(hLabel = '', labelText = ''):
 		print 'NodeListItem.updateLabel("%s", "%s")' %(hLabel, labelText)
@@ -533,7 +551,7 @@ class NodeListItem(object):
 	def setColorCode(self):
 		if self.isValid():
 			print 'Valid'
-			
+
 	def update(self, arg = None):
 		pass
 
@@ -641,7 +659,7 @@ class NodeListItemFile(NodeListItem):
 				(openFileLocBtn, 'left', 0, editFileBtn),
 				(openFileLocBtn, 'top', 0, self.hLabel)
 				] )
-		
+
 		# scriptjob for updating the label of the NodeListItem
 		cmd = 'import bpj_shaderAndTextureLister as bpj_stl;'
 		cmd+= 'import maya.cmds as cmds;'
@@ -710,17 +728,17 @@ def openTextureLocation(fileNode):
 	filePath = cmds.getAttr(fileNode + '.fileTextureName')
 	if filePath != '':
 		mods = cmds.getModifiers()
-		
+
 		if mods == 0:
 			startfile(os.path.dirname(filePath))
-			
+
 		if mods == 1: # alt
 			r = Tk()
 			r.withdraw()
 			r.clipboard_clear()
 			r.clipboard_append(filePath)
 			r.destroy()
-			
+
 		if mods == 8: # shift
 			r = Tk()
 			r.withdraw()
@@ -799,12 +817,12 @@ def getShadingGroupsAndTextures():
 	# creating a itemFilter for use with the lsThroughFilter
 	# command to get rid of all non surfaceShape nodes
 	surfaceShapeList = []
-	
+
 	validNodes = cmds.ls(sel, type = ['mesh', 'nurbsSurface', 'subdiv'])
-	
+
 	if len(validNodes) == 0:
 		return None
-		
+
 	surfaceShapeList.extend(validNodes)
 
 	shadingEngineList = []
@@ -827,16 +845,16 @@ def getShadingGroupsAndTextures():
 			# nodeList = cmds.listHistory(shadingEngine, future = 0, allGraphs = 1)
 			# fileNodeList = cmds.lsThroughFilter(fileFilter, item = nodeList, nodeArray = 1, sort = 'byName')
 			nodeList = cmds.listHistory(shadingEngine, future = False, allGraphs = True, allConnections = False)
-			
+
 			fileNodeList = cmds.ls(nodeList, exactType = ['file'])
 			# WORKAROUND of a maya bug. Maya is not listing file nodes connected to the vector displacement attr of a displacement node!
 			# So we need to query the connections of the displacement shader (if exists) as well.
-			displacementShaderNodeList = cmds.ls(nodeList, exactType = ['displacementShader']) 
-			
+			displacementShaderNodeList = cmds.ls(nodeList, exactType = ['displacementShader'])
+
 			for dispNode in displacementShaderNodeList:
 				nodeList = cmds.listHistory(dispNode, future = False, allGraphs = True, allConnections = False)
 				fileNodeList.extend(cmds.ls(nodeList, exactType = ['file']))
-			
+
 			fileNodeList = list(set(fileNodeList))
 
 			shaderTextureDict[shadingEngine] = fileNodeList
